@@ -1,0 +1,450 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>TrackPick</title>
+<style>
+/* Layout: single column on phone, inputs rail + results on desktop. */
+:root{
+  --bg:#f6f5f2; --surface:#ffffff; --line:#d9d6ce; --ink:#1c1b18; --muted:#6b6760;
+  --accent:#8a4b2a; --ok:#2f6b4f; --bad:#9c3024; --chip:#ece9e2;
+  --f-ui:"Inter",-apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif;
+  --f-num:"IBM Plex Mono",ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#171614; --surface:#211f1c; --line:#3a3731; --ink:#f0ece4; --muted:#a39d93;
+  --accent:#d98a5c; --ok:#6fb48f; --bad:#e0796a; --chip:#2c2925; color-scheme:dark;
+}}
+:root[data-theme="dark"]{
+  --bg:#171614; --surface:#211f1c; --line:#3a3731; --ink:#f0ece4; --muted:#a39d93;
+  --accent:#d98a5c; --ok:#6fb48f; --bad:#e0796a; --chip:#2c2925; color-scheme:dark;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--f-ui);font-size:15px;line-height:1.5}
+.wrap{max-width:1180px;margin:0 auto;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:24px 48px}
+header{border-bottom:2px solid var(--ink);padding-bottom:12px;margin-bottom:22px}
+h1{font-size:26px;margin:0 0 4px;letter-spacing:-.02em;text-wrap:balance}
+.sub{color:var(--muted);font-size:13px;margin:0}
+.q{font-size:13px;margin:8px 0 0;max-width:72ch}
+.grid{display:grid;grid-template-columns:320px minmax(0,1fr);gap:22px;align-items:start}
+@media (max-width:860px){.grid{grid-template-columns:1fr}}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:16px;min-width:0}
+h2{font-size:11px;letter-spacing:.09em;text-transform:uppercase;color:var(--muted);margin:0 0 12px;font-weight:700}
+label{display:block;font-size:12px;font-weight:600;margin:0 0 4px}
+input[type=text],input[type=number]{width:100%;padding:8px 9px;border:1px solid var(--line);border-radius:5px;background:var(--bg);color:var(--ink);font:inherit;font-size:14px}
+input:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+.field{margin-bottom:14px}
+.row2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.hint{font-size:11px;color:var(--muted);margin-top:3px}
+.artist-row{display:flex;gap:6px;margin-bottom:6px}
+.artist-row input{flex:1;min-width:0}
+.rm{border:1px solid var(--line);background:var(--bg);color:var(--muted);border-radius:5px;width:30px;cursor:pointer;font-size:15px;flex:none}
+.rm:hover{color:var(--bad);border-color:var(--bad)}
+.addbtn{background:none;border:1px dashed var(--line);color:var(--muted);border-radius:5px;padding:5px 9px;font:inherit;font-size:12px;cursor:pointer;width:100%}
+.addbtn:hover{border-color:var(--accent);color:var(--accent)}
+input[type=range]{width:100%;accent-color:var(--accent);margin:4px 0 0}
+.wt{display:flex;justify-content:space-between;font-size:12px;font-variant-numeric:tabular-nums}
+.run{width:100%;margin-top:6px;padding:11px;background:var(--ink);color:var(--bg);border:0;border-radius:6px;font:inherit;font-weight:700;font-size:15px;cursor:pointer}
+.run:hover{background:var(--accent)}
+.run:disabled{opacity:.55;cursor:default}
+.kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:14px}
+@media (max-width:620px){.kpis{grid-template-columns:repeat(2,1fr)}}
+.kpi{background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:11px 12px}
+.kpi .k{font-size:10px;letter-spacing:.07em;text-transform:uppercase;color:var(--muted);font-weight:700}
+.kpi .v{font-family:var(--f-num);font-size:25px;font-weight:600;margin:3px 0 1px;font-variant-numeric:tabular-nums}
+.kpi .s{font-size:11px;color:var(--muted)}
+.tablewrap{overflow-x:auto}
+table{width:100%;border-collapse:collapse;font-size:13px}
+th{text-align:left;font-size:10px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);border-bottom:1px solid var(--line);padding:0 8px 6px 0;white-space:nowrap}
+td{padding:9px 8px 9px 0;border-bottom:1px solid var(--line);vertical-align:top}
+td.n{font-family:var(--f-num);font-variant-numeric:tabular-nums;white-space:nowrap}
+tr.top td{background:linear-gradient(90deg,color-mix(in srgb,var(--accent) 11%,transparent),transparent 70%)}
+tr.out td{color:var(--muted)}
+.rank{font-family:var(--f-num);font-weight:700;font-size:16px}
+.name{font-weight:600}
+.chip{display:inline-block;font-size:10px;padding:2px 6px;border-radius:99px;background:var(--chip);color:var(--muted);white-space:nowrap}
+.chip.ok{background:color-mix(in srgb,var(--ok) 18%,transparent);color:var(--ok)}
+.chip.bad{background:color-mix(in srgb,var(--bad) 16%,transparent);color:var(--bad)}
+.why{border-left:3px solid var(--accent);padding:10px 0 10px 12px;font-size:13px;margin-top:4px}
+.why b{font-family:var(--f-num);font-size:12px}
+.transp{border:2px solid var(--ink);border-radius:8px;padding:14px 16px;margin-top:18px;background:var(--surface)}
+.transp h2{color:var(--ink)}
+.transp ul{margin:0;padding-left:17px}
+.transp li{font-size:12.5px;margin-bottom:6px;max-width:92ch}
+.status{font-size:13px;color:var(--muted);padding:10px 0}
+.err{border:1px solid var(--bad);border-radius:6px;padding:11px 13px;font-size:13px;color:var(--bad);background:color-mix(in srgb,var(--bad) 7%,transparent)}
+details{margin-top:14px;font-size:12px}
+summary{cursor:pointer;color:var(--muted);font-weight:600}
+pre{background:var(--chip);border:1px solid var(--line);border-radius:6px;padding:10px;overflow-x:auto;font-family:var(--f-num);font-size:11px;line-height:1.45;margin:8px 0 0;max-height:280px}
+footer{margin-top:26px;padding-top:12px;border-top:1px solid var(--line);font-size:11px;color:var(--muted)}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <h1>TrackPick</h1>
+  <p class="sub">Data-driven artist selection for themed events &middot; MGSC 220 prototype</p>
+  <p class="q">Given a shortlist of candidate artists, which should I feature at my event &mdash; ranked by catalog freshness and depth, within my budget?</p>
+</header>
+
+<div class="grid">
+
+  <!-- ============ INPUTS ============ -->
+  <form class="card" id="form">
+    <h2>Inputs</h2>
+
+    <div class="field">
+      <label>Candidate artists (min 2)</label>
+      <div id="artists"></div>
+      <button type="button" class="addbtn" id="add">+ Add artist</button>
+    </div>
+
+    <div class="row2 field">
+      <div>
+        <label for="budget">Budget cap (USD)</label>
+        <input type="number" id="budget" value="12" min="1" step="0.01">
+      </div>
+      <div>
+        <label for="minTracks">Min tracks</label>
+        <input type="number" id="minTracks" value="8" min="1" step="1">
+      </div>
+    </div>
+
+    <div class="field">
+      <label for="target">Target catalog size (for depth)</label>
+      <input type="number" id="target" value="60" min="1" step="1">
+      <div class="hint">Depth = distinct tracks &divide; this, capped at 1.0</div>
+    </div>
+
+    <div class="field">
+      <label for="wf">Weights</label>
+      <input type="range" id="wf" min="0" max="100" step="5" value="60">
+      <div class="wt"><span>Freshness <b id="wfv">60%</b></span><span>Depth <b id="wdv">40%</b></span></div>
+      <div class="hint">Sliders are linked and always total 100%.</div>
+    </div>
+
+    <button class="run" id="run" type="submit">Run / Recommend</button>
+    <div class="hint" style="text-align:center">Live call to the iTunes Search API, one request per artist</div>
+  </form>
+
+  <!-- ============ OUTPUTS ============ -->
+  <div>
+    <div class="kpis" id="kpis"></div>
+
+    <div class="card">
+      <h2>Recommendation output</h2>
+      <div id="status" class="status">Enter artists and click Run.</div>
+      <div class="tablewrap" id="tablewrap" hidden>
+        <table>
+          <thead><tr>
+            <th>#</th><th>Artist</th><th>Score</th><th>Fresh</th><th>Depth</th>
+            <th>Set cost</th><th>Tracks</th><th>Status</th>
+          </tr></thead>
+          <tbody id="tbody"></tbody>
+        </table>
+      </div>
+      <div class="why" id="why" hidden></div>
+      <details id="raw" hidden>
+        <summary>Raw API response (first record, as returned)</summary>
+        <pre id="rawpre"></pre>
+      </details>
+    </div>
+
+    <div class="transp">
+      <h2>Model transparency</h2>
+      <ul>
+        <li><b>Assumption:</b> Freshness uses the iTunes release date of the edition returned, on a 10-year scale. Remasters and reissues carry the reissue date, and some tracks return placeholder dates, so older catalogs can appear newer than they are.</li>
+        <li><b>Limitation:</b> Results are capped at 200 tracks per artist and the same song appears on multiple albums. Duplicates are removed by title, but an artist hitting the cap has a truncated depth score that is not comparable to a smaller catalog.</li>
+        <li><b>Limitation:</b> Affordability counts only tracks with a valid iTunes price. Streaming-only and album-only tracks return no price and are dropped, so streaming-first artists can look cheaper than they are.</li>
+        <li><b>What this does not mean:</b> This is not a prediction of crowd response, ticket sales, or artist availability. "Affordable" refers to the cost of purchasing recordings, not the artist's booking fee.</li>
+      </ul>
+    </div>
+
+    <footer>Source: iTunes Search API (free, no key) &middot; itunes.apple.com/search &middot; Prototype for Checkpoint 4</footer>
+  </div>
+</div>
+</div>
+
+<script>
+(function(){
+"use strict";
+
+var DEFAULTS = ["Dua Lipa","Fleetwood Mac","Bad Bunny"];
+var artistsEl = document.getElementById("artists");
+
+function addRow(val){
+  var d = document.createElement("div");
+  d.className = "artist-row";
+  var i = document.createElement("input");
+  i.type = "text"; i.value = val || ""; i.placeholder = "Artist name";
+  i.setAttribute("aria-label","Artist name");
+  var b = document.createElement("button");
+  b.type = "button"; b.className = "rm"; b.textContent = "×";
+  b.setAttribute("aria-label","Remove artist");
+  b.onclick = function(){ if(artistsEl.children.length > 2) d.remove(); };
+  d.appendChild(i); d.appendChild(b); artistsEl.appendChild(d);
+}
+DEFAULTS.forEach(addRow);
+document.getElementById("add").onclick = function(){ addRow(""); };
+
+var wf = document.getElementById("wf");
+wf.oninput = function(){
+  document.getElementById("wfv").textContent = wf.value + "%";
+  document.getElementById("wdv").textContent = (100 - wf.value) + "%";
+};
+
+/* iTunes does not send CORS headers, so cross-origin reads use the
+   documented JSONP callback parameter instead of fetch(). */
+function jsonp(url){
+  return new Promise(function(resolve, reject){
+    var cb = "tp_" + Math.random().toString(36).slice(2);
+    var s = document.createElement("script");
+    var timer = setTimeout(function(){ cleanup(); reject(new Error("Request timed out")); }, 15000);
+    function cleanup(){
+      clearTimeout(timer);
+      try { delete window[cb]; } catch(e) { window[cb] = undefined; }
+      if (s.parentNode) s.parentNode.removeChild(s);
+    }
+    window[cb] = function(data){ cleanup(); resolve(data); };
+    s.onerror = function(){ cleanup(); reject(new Error("Network blocked the request")); };
+    s.src = url + "&callback=" + cb;
+    document.body.appendChild(s);
+  });
+}
+
+function endpoint(name){
+  return "https://itunes.apple.com/search?term=" + encodeURIComponent(name) +
+         "&media=music&entity=song&attribute=artistTerm&country=US&limit=200";
+}
+
+var DAY = 86400000, HORIZON = 3650;
+
+function score(raw, cfg){
+  var rows = (raw.results || []).filter(function(r){ return r.kind === "song"; });
+  var seen = Object.create(null), clean = [];
+  rows.forEach(function(r){
+    var key = String(r.trackName || "").toLowerCase().trim();
+    if (!key) return;
+    var price = typeof r.trackPrice === "number" && r.trackPrice > 0 ? r.trackPrice : null;
+    if (seen[key] === undefined){ seen[key] = clean.length; clean.push({name:key, price:price, date:r.releaseDate}); }
+    else if (price !== null){
+      var cur = clean[seen[key]];
+      if (cur.price === null || price < cur.price) cur.price = price;
+    }
+  });
+
+  var dated = clean.filter(function(t){ return t.date; });
+  var fresh = 0;
+  if (dated.length){
+    var sum = 0, now = Date.now();
+    dated.forEach(function(t){
+      var days = (now - new Date(t.date).getTime()) / DAY;
+      sum += 1 - Math.min(1, Math.max(0, days) / HORIZON);
+    });
+    fresh = sum / dated.length;
+  }
+
+  var depth = Math.min(1, clean.length / cfg.target);
+  var priced = clean.filter(function(t){ return t.price !== null; })
+                    .map(function(t){ return t.price; })
+                    .sort(function(a,b){ return a - b; });
+
+  var enoughTracks = clean.length >= cfg.minTracks;
+  var enoughPriced = priced.length >= cfg.minTracks;
+  var cost = enoughPriced ? priced.slice(0, cfg.minTracks).reduce(function(a,b){ return a + b; }, 0) : null;
+  var inBudget = cost !== null && cost <= cfg.budget;
+  var eligible = enoughTracks && enoughPriced && inBudget;
+
+  var reason = eligible ? "Within budget"
+    : !enoughTracks ? "Too few tracks"
+    : !enoughPriced ? "Too few priced"
+    : "Over budget";
+
+  return {
+    distinct: clean.length,
+    pricedCount: priced.length,
+    fresh: fresh,
+    depth: depth,
+    cost: cost,
+    eligible: eligible,
+    reason: reason,
+    truncated: raw.resultCount >= 200,
+    composite: cfg.wf * fresh + (1 - cfg.wf) * depth
+  };
+}
+
+function n2(x){ return x.toFixed(2); }
+function usd(x){ return x === null ? "—" : "$" + x.toFixed(2); }
+
+function renderKpis(top, cfg){
+  var k = document.getElementById("kpis");
+  if (!top){ k.innerHTML = ""; return; }
+  var items = [
+    ["KPI 1 — Freshness", n2(top.fresh), top.artist + ", 0–1 scale"],
+    ["KPI 2 — Catalog depth", n2(top.depth), top.distinct + " of " + cfg.target + " target"],
+    ["KPI 3 — Set cost", usd(top.cost), "cheapest " + cfg.minTracks + " vs $" + cfg.budget.toFixed(2)],
+    ["KPI 4 — Tracks used", String(top.distinct), "after dedup and price filter"]
+  ];
+  k.innerHTML = items.map(function(i){
+    return '<div class="kpi"><div class="k"></div><div class="v"></div><div class="s"></div></div>';
+  }).join("");
+  Array.prototype.forEach.call(k.children, function(el, idx){
+    el.querySelector(".k").textContent = items[idx][0];
+    el.querySelector(".v").textContent = items[idx][1];
+    el.querySelector(".s").textContent = items[idx][2];
+  });
+}
+
+document.getElementById("form").onsubmit = function(e){
+  e.preventDefault();
+
+  var names = Array.prototype.map.call(artistsEl.querySelectorAll("input"), function(i){ return i.value.trim(); })
+                   .filter(Boolean);
+  var status = document.getElementById("status");
+  var tableWrap = document.getElementById("tablewrap");
+  var why = document.getElementById("why");
+
+  if (names.length < 2){
+    status.innerHTML = '<div class="err">Enter at least two artists to compare.</div>';
+    tableWrap.hidden = true; why.hidden = true; renderKpis(null);
+    return;
+  }
+
+  var cfg = {
+    budget: parseFloat(document.getElementById("budget").value) || 0,
+    minTracks: parseInt(document.getElementById("minTracks").value, 10) || 1,
+    target: parseInt(document.getElementById("target").value, 10) || 1,
+    wf: parseInt(wf.value, 10) / 100
+  };
+
+  var btn = document.getElementById("run");
+  btn.disabled = true;
+  status.textContent = "Calling iTunes Search API for " + names.length + " artists…";
+  tableWrap.hidden = true; why.hidden = true;
+
+  Promise.all(names.map(function(name){
+    return jsonp(endpoint(name))
+      .then(function(raw){
+        var s = score(raw, cfg);
+        s.artist = name;
+        s.returned = raw.resultCount;
+        s.sample = (raw.results && raw.results[0]) || null;
+        return s;
+      })
+      .catch(function(err){ return { artist: name, failed: true, error: err.message }; });
+  })).then(function(all){
+    btn.disabled = false;
+
+    var failed = all.filter(function(a){ return a.failed; });
+    if (failed.length === all.length){
+      status.innerHTML = '<div class="err"><b>API call failed.</b> ' + failed[0].error +
+        '. Check the network connection and try again.</div>';
+      renderKpis(null);
+      return;
+    }
+
+    var ok = all.filter(function(a){ return !a.failed; });
+    var ranked = ok.filter(function(a){ return a.eligible; })
+                   .sort(function(a,b){ return b.composite - a.composite || a.cost - b.cost; });
+    var excluded = ok.filter(function(a){ return !a.eligible; });
+
+    var tb = document.getElementById("tbody");
+    tb.innerHTML = "";
+
+    function cell(tr, text, cls){
+      var td = document.createElement("td");
+      if (cls) td.className = cls;
+      td.textContent = text;
+      return (tr.appendChild(td), td);
+    }
+
+    ranked.forEach(function(a, i){
+      var tr = document.createElement("tr");
+      if (i === 0) tr.className = "top";
+      cell(tr, String(i + 1), "n rank");
+      cell(tr, a.artist, "name");
+      cell(tr, n2(a.composite), "n");
+      cell(tr, n2(a.fresh), "n");
+      cell(tr, n2(a.depth), "n");
+      cell(tr, usd(a.cost), "n");
+      cell(tr, String(a.distinct) + (a.truncated ? " ⚠" : ""), "n");
+      var td = document.createElement("td");
+      td.innerHTML = '<span class="chip ok"></span>';
+      td.firstChild.textContent = a.reason;
+      tr.appendChild(td);
+      tb.appendChild(tr);
+    });
+
+    excluded.forEach(function(a){
+      var tr = document.createElement("tr");
+      tr.className = "out";
+      cell(tr, "—", "n rank");
+      cell(tr, a.artist, "name");
+      cell(tr, "excluded", "n");
+      cell(tr, n2(a.fresh), "n");
+      cell(tr, n2(a.depth), "n");
+      cell(tr, usd(a.cost), "n");
+      cell(tr, String(a.distinct), "n");
+      var td = document.createElement("td");
+      td.innerHTML = '<span class="chip bad"></span>';
+      td.firstChild.textContent = a.reason;
+      tr.appendChild(td);
+      tb.appendChild(tr);
+    });
+
+    failed.forEach(function(a){
+      var tr = document.createElement("tr");
+      tr.className = "out";
+      cell(tr, "—", "n rank");
+      cell(tr, a.artist, "name");
+      ["—","—","—","—","—"].forEach(function(t){ cell(tr, t, "n"); });
+      var td = document.createElement("td");
+      td.innerHTML = '<span class="chip bad"></span>';
+      td.firstChild.textContent = "API error";
+      tr.appendChild(td);
+      tb.appendChild(tr);
+    });
+
+    renderKpis(ranked[0] || ok[0], cfg);
+    tableWrap.hidden = false;
+
+    var totalRows = ok.reduce(function(s, a){ return s + a.returned; }, 0);
+    status.textContent = "Scored " + ok.length + " artists from " + totalRows +
+      " API records · " + new Date().toLocaleString();
+
+    var w = document.getElementById("why");
+    if (ranked.length){
+      var first = ranked[0], second = ranked[1];
+      var txt = "<b>Score = (" + cfg.wf.toFixed(2) + " × Freshness) + (" +
+        (1 - cfg.wf).toFixed(2) + " × Depth)</b><br>" +
+        first.artist + " ranks first at " + n2(first.composite) +
+        " (freshness " + n2(first.fresh) + ", depth " + n2(first.depth) +
+        "), with a " + cfg.minTracks + "-track set costing " + usd(first.cost) +
+        " against a $" + cfg.budget.toFixed(2) + " budget.";
+      if (second) txt += " Next is " + second.artist + " at " + n2(second.composite) + ".";
+      if (excluded.length) txt += " " + excluded.length + " artist" +
+        (excluded.length > 1 ? "s were" : " was") + " excluded before ranking: " +
+        excluded.map(function(a){ return a.artist + " (" + a.reason.toLowerCase() + ")"; }).join(", ") + ".";
+      var trunc = ok.filter(function(a){ return a.truncated; });
+      if (trunc.length) txt += " ⚠ " + trunc.map(function(a){ return a.artist; }).join(", ") +
+        " hit the 200-result cap, so depth is truncated and not directly comparable.";
+      w.innerHTML = txt;
+    } else {
+      w.innerHTML = "<b>No artist met both constraints.</b> Every candidate failed the minimum-track or budget test, so nothing is ranked. Raise the budget or lower the minimum track count.";
+    }
+    w.hidden = false;
+
+    var withSample = ok.filter(function(a){ return a.sample; })[0];
+    if (withSample){
+      document.getElementById("rawpre").textContent = JSON.stringify(withSample.sample, null, 2);
+      document.getElementById("raw").hidden = false;
+    }
+  });
+};
+})();
+</script>
+</body>
+</html>
